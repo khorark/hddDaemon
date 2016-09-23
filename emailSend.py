@@ -40,15 +40,20 @@ class SendMail():
         msgFormat = MIMEText(html, 'html')
         self.multi_msg.attach(msgFormat)
 
-        self.sendMessageToMail()
+        return self._sendMessageToMail()
 
-    def sendMessageToMail(self):
+    def _sendMessageToMail(self):
         # отправка
         smtp = SMTP_SSL()
         smtp.connect(self.smtp_server)
-        smtp.login(self.mail_from, self.smtp_pwd)
+        try:
+            smtp.login(self.mail_from, self.smtp_pwd)
+        except Exception:
+            print('Ошибка! Проверьте логин, пароль и адрес сервера для отправки')
+            return False
         smtp.sendmail(self.mail_from, self.mail_to, self.multi_msg.as_string())
         smtp.quit()
+        return True
 
 
 if __name__ == '__main__':

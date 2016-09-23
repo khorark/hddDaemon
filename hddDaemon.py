@@ -15,24 +15,24 @@ class App():
         self.pidfile_path = '/tmp/foo.pid'
         self.pidfile_timeout = 5
         self.basedir = "/home/"
-        self.buf = 0
 
     def run(self):
         while True:
             if platform.system() == 'Windows':
                 free_bytes = ctypes.c_ulonglong(0)
-                ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(folder), None, None,
+                ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(self.basedir), None, None,
                                                            ctypes.pointer(free_bytes))
                 return free_bytes.value
             else:
-                self.buf += 1
-                freeSpace = os.statvfs('/home').f_bavail * os.statvfs('/home').f_bsize
+                freeSpace = os.statvfs('/home').f_bavail * os.statvfs(self.basedir).f_bsize
                 freeSpaceGb = round(freeSpace/1024**3, 2)
                 print('Количество свободного места = {}Кб'.format(freeSpace))
                 print('Количество свободного места = {}Гб'.format(freeSpaceGb))
-                if (self.buf == 2):
+                if (freeSpaceGb < 88):
                     print('Отправка письма!')
-                    SendMail(freeSpaceGb).constructMessage()
+                    if (SendMail(freeSpaceGb).constructMessage() == False):
+                        print('Демон остановлен')
+                        return
 
             time.sleep(10)
 
