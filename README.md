@@ -13,13 +13,13 @@
 <b>Использование:</b><br>
     Скрипт работает в режиме демона, так что для запуска необходимо прописать:
     <br>
-    <b>python3 main.py start</b> для страта;
+    <b>python3 main.py start</b> для старта;
      <br>
     <b>python3 main.py stop</b> для остановки;
      <br>
     <b>python3 main.py restart</b> для перезапуска;
      <br>
-    <b>python3 main.py status</b> для проверки состояния работы.
+    <b>python3 main.py status</b> для проверки состояния.
         <br>
 
 
