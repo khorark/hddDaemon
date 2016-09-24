@@ -3,8 +3,11 @@ import os
 import platform
 import ctypes
 import time
+import json
+import re
 from daemon import runner
 from emailSend import SendMail
+import base64
 
 
 class App():
@@ -14,29 +17,87 @@ class App():
         self.stderr_path = '/dev/tty'
         self.pidfile_path = '/tmp/foo.pid'
         self.pidfile_timeout = 5
-        self.basedir = "/home/"
+        self.path = 'setting.json'
+
+    def checkFileSettings(self):
+        try:
+            self.data = json.load(open(self.path))
+            # Проверка пароля пользователя
+            if (self.data['smpt_pass'] == ''):
+                self.data['smpt_pass'] = input('Введите пароль от почты: \n')
+            else:
+                self.data['smpt_pass'] = base64.b64decode(self.data['smpt_pass'])
+                self.data['smpt_pass'] = self.data['smpt_pass'].decode('utf-8')
+        except FileNotFoundError:
+            mes = input('Файл с настройками не был найден! Необходима первоначальная настройка программы. Настроить сейчас? y/n ')
+            if mes == 'y':
+                self.createSettingFile()
+            elif mes == 'n':
+                exit(0)
+            else:
+                self.checkFileSettings()
+        except TypeError:
+            print('Неизвестный тип файла. Пожалуйста выполните настройку заново')
+
+    def createSettingFile(self):
+        print('Вас приветсвует мастер первоначальной настройки скрипта!')
+        data = {}
+        data['basedir'] = input('Введите полный путь к директории/устройству для отслеживания свободного места.\n')
+        if (os.path.exists(data['basedir']) == False):
+            print('Такой директории не существует!')
+            self.createSettingFile()
+            return
+        data['min_size'] = input('Введите критический объем, при котором будет отправлено сообщение (в Гб):\n')
+        data['time_update'] = input('Введите интервал обновления данных для проверки (в секундах)\n')
+        data['mail_from'] = input('Введи почтовый адрес отправителя:\n')
+        reg_smtp_serv = '.+@(.+)\..+'
+        if (re.match(reg_smtp_serv, data['mail_from']).group(1)):
+            smtp_serv = re.match(reg_smtp_serv, data['mail_from']).group(1)
+            if smtp_serv == 'mail':
+                data['smtp_server'] = 'smtp.mail.ru'
+            elif smtp_serv == 'ya' or 'yandex':
+                data['smtp_server'] = 'smpt.yandex.com'
+            elif smtp_serv == 'gmail':
+                data['smtp_server'] = 'smtp.googlemail.com'
+            else:
+                data['smtp_server'] = input('Введи почтовый smtp сервер вручную: \n')
+        else:
+            print('Вы ввели некорректный email!')
+            exit(1)
+
+        data['mail_to'] = input('Введите почтовый адрес получателя:\n')
+        # q = input('Хотите сохранить пароль от почты в файл? y/n ')
+        # if q == 'y':
+        data['smpt_pass'] = input('Введите пароль от почты: \n')
+        data['smpt_pass'] = base64.b64encode(bytes(data['smpt_pass'], "utf-8"))
+        data['smpt_pass'] = data['smpt_pass'].decode('utf-8')
+        # else:
+        #     data['smpt_pass'] = ''
+
+        json.dump(data, open(self.path, 'w'))
+        print('Файл с настройкам успешно создан! Пожалуйста перезапустите программу')
+        exit(0)
 
     def run(self):
         while True:
             if platform.system() == 'Windows':
                 free_bytes = ctypes.c_ulonglong(0)
-                ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(self.basedir), None, None,
+                ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(self.data['basedir']), None, None,
                                                            ctypes.pointer(free_bytes))
                 return free_bytes.value
             else:
-                freeSpace = os.statvfs('/home').f_bavail * os.statvfs(self.basedir).f_bsize
+                freeSpace = os.statvfs('/home').f_bavail * os.statvfs(self.data['basedir']).f_bsize
+                freeSpaceMb = round(freeSpace/1024**2, 2)
                 freeSpaceGb = round(freeSpace/1024**3, 2)
-                print('Количество свободного места = {}Кб'.format(freeSpace))
-                print('Количество свободного места = {}Гб'.format(freeSpaceGb))
-                if (freeSpaceGb < 88):
-                    print('Отправка письма!')
-                    if (SendMail(freeSpaceGb).constructMessage() == False):
+                if (freeSpaceGb < int(self.data['min_size'])):
+                    if (SendMail(freeSpaceGb, self.data).constructMessage() == False):
                         print('Демон остановлен')
                         return
 
-            time.sleep(10)
+            time.sleep(int(self.data['time_update']))
 
 
 app = App()
+app.checkFileSettings()
 daemon_runner = runner.DaemonRunner(app)
 daemon_runner.do_action()
